@@ -46,8 +46,6 @@
 
 /* Private define ------------------------------------------------------------*/
 
-
-/* USER CODE BEGIN Private defines */
 #define motorStep_Pin GPIO_PIN_0
 #define motorStep_GPIO_Port GPIOA
 #define motorDir_Pin GPIO_PIN_1
@@ -55,12 +53,8 @@
 #define motorEnable_Pin GPIO_PIN_2
 #define motorEnable_GPIO_Port GPIOA
 
-#define INITIAL_DELAY	1000
-#define RAMP_RATE		12
-#define NO_RAMP_CYCLE	2
+/* USER CODE BEGIN Private defines */
 
-#define ACCELERATION	5
-#define INITIAL_PERIOD	1000
 /* USER CODE END Private defines */
 
 void _Error_Handler(char *, int);

@@ -1,13 +1,8 @@
 /**
   ******************************************************************************
-  * File Name          : main.h
-  * Description        : This file contains the common defines of the application
+  * @file    stm32f1xx_it.h
+  * @brief   This file contains the headers of the interrupt handlers.
   ******************************************************************************
-  ** This notice applies to any and all portions of this file
-  * that are not between comment pairs USER CODE BEGIN and
-  * USER CODE END. Other portions of this file, whether 
-  * inserted by the user or by software development tools
-  * are owned by their respective copyright owners.
   *
   * COPYRIGHT(c) 2017 STMicroelectronics
   *
@@ -35,45 +30,37 @@
   *
   ******************************************************************************
   */
+
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __MAIN_H
-#define __MAIN_H
-  /* Includes ------------------------------------------------------------------*/
+#ifndef __STM32F1xx_IT_H
+#define __STM32F1xx_IT_H
 
-/* USER CODE BEGIN Includes */
+#ifdef __cplusplus
+ extern "C" {
+#endif 
 
-/* USER CODE END Includes */
+/* Includes ------------------------------------------------------------------*/
+#include "stm32f1xx_hal.h"
+#include "main.h"
+/* Exported types ------------------------------------------------------------*/
+/* Exported constants --------------------------------------------------------*/
+/* Exported macro ------------------------------------------------------------*/
+/* Exported functions ------------------------------------------------------- */
 
-/* Private define ------------------------------------------------------------*/
+void NMI_Handler(void);
+void HardFault_Handler(void);
+void MemManage_Handler(void);
+void BusFault_Handler(void);
+void UsageFault_Handler(void);
+void SVC_Handler(void);
+void DebugMon_Handler(void);
+void PendSV_Handler(void);
+void SysTick_Handler(void);
 
+#ifdef __cplusplus
+}
+#endif
 
-/* USER CODE BEGIN Private defines */
-#define motorStep_Pin GPIO_PIN_0
-#define motorStep_GPIO_Port GPIOA
-#define motorDir_Pin GPIO_PIN_1
-#define motorDir_GPIO_Port GPIOA
-#define motorEnable_Pin GPIO_PIN_2
-#define motorEnable_GPIO_Port GPIOA
+#endif /* __STM32F1xx_IT_H */
 
-#define INITIAL_DELAY	1000
-#define RAMP_RATE		12
-#define NO_RAMP_CYCLE	2
-
-#define ACCELERATION	5
-#define INITIAL_PERIOD	1000
-/* USER CODE END Private defines */
-
-void _Error_Handler(char *, int);
-
-#define Error_Handler() _Error_Handler(__FILE__, __LINE__)
-
-/**
-  * @}
-  */ 
-
-/**
-  * @}
-*/ 
-
-#endif /* __MAIN_H */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

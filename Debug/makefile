@@ -28,13 +28,13 @@ endif
 # Add inputs and outputs from these tool invocations to the build variables 
 
 # All Target
-all: StepperMotor.elf
+all: stepperMotor.elf
 
 # Tool invocations
-StepperMotor.elf: $(OBJS) $(USER_OBJS) ../STM32F103C8Tx_FLASH.ld
+stepperMotor.elf: $(OBJS) $(USER_OBJS) ../STM32F103C8Tx_FLASH.ld
 	@echo 'Building target: $@'
 	@echo 'Invoking: MCU GCC Linker'
-	arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -specs=nosys.specs -specs=nano.specs -T"../STM32F103C8Tx_FLASH.ld" -Wl,-Map=output.map -Wl,--gc-sections -o "StepperMotor.elf" @"objects.list" $(USER_OBJS) $(LIBS) -lm
+	arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -specs=nosys.specs -specs=nano.specs -T"../STM32F103C8Tx_FLASH.ld" -Wl,-Map=output.map -Wl,--gc-sections -o "stepperMotor.elf" @"objects.list" $(USER_OBJS) $(LIBS) -lm
 	@echo 'Finished building target: $@'
 	@echo ' '
 	$(MAKE) --no-print-directory post-build
@@ -46,8 +46,8 @@ clean:
 
 post-build:
 	-@echo 'Generating binary and Printing size information:'
-	arm-none-eabi-objcopy -O binary "StepperMotor.elf" "StepperMotor.bin"
-	arm-none-eabi-size "StepperMotor.elf"
+	arm-none-eabi-objcopy -O binary "stepperMotor.elf" "stepperMotor.bin"
+	arm-none-eabi-size "stepperMotor.elf"
 	-@echo ' '
 
 .PHONY: all clean dependents

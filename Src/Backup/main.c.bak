@@ -36,6 +36,7 @@
   ******************************************************************************
   */
 /* Includes ------------------------------------------------------------------*/
+#include <stdint.h>
 #include "main.h"
 #include "stm32f1xx_hal.h"
 
@@ -57,12 +58,11 @@ static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 void rampMotorTo(int delayValue);
-void rampMotorExp(int delayValue, int initialValue);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
 void delay(volatile unsigned int delay) {
-  	while(delay--);
+ 	while(delay--);
 }
 
 
@@ -100,11 +100,10 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-//  delay(10000000);
+  delay(10000000);
   while (i)
   {
-	  //ramp up motor speed from 20000 to 750
-	  rampMotorExp(3500, 20000);
+	rampMotorTo(750);
 /*
     HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
     delay(5000);
@@ -189,6 +188,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, motorEnable_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOA, motorStep_Pin|motorDir_Pin|motorEnable_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : motorStep_Pin motorDir_Pin motorEnable_Pin */
@@ -198,6 +198,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
+
+#define INITIAL_DELAY	10000
+#define RAMP_RATE		6
+#define NO_RAMP_CYCLE	2
 
 /* USER CODE BEGIN 4 */
 void rampMotorTo(int delayValue) {
@@ -216,29 +220,6 @@ void rampMotorTo(int delayValue) {
     delay(delayValue);
     HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
     delay(delayValue);
-  }
-}
-
-void rampMotorExp(int delayValue, int initialValue){
-  int i;
-  uint32_t initialDelay = 72000000 / (ACCELERATION * initialValue);
-
-
-  float period = initialValue;
-  while(period > delayValue){
-	  for(i = 0; i < NO_RAMP_CYCLE; i++) {
-		HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
-		delay(period);
-	  }
-	  initialDelay += RAMP_RATE;
-	  period = 72000000 / (ACCELERATION * initialDelay);
-
-  }
-  while(1) {
-    HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
-    delay(period);
   }
 }
 /* USER CODE END 4 */
