@@ -46,6 +46,14 @@
 
 /* Private define ------------------------------------------------------------*/
 
+#define led1_Pin GPIO_PIN_13
+#define led1_GPIO_Port GPIOC
+#define motorStep_Pin GPIO_PIN_0
+#define motorStep_GPIO_Port GPIOA
+#define motorDir_Pin GPIO_PIN_1
+#define motorDir_GPIO_Port GPIOA
+#define motorEnable_Pin GPIO_PIN_2
+#define motorEnable_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 #define motorStep_Pin GPIO_PIN_0
@@ -59,7 +67,7 @@
 #define RAMP_RATE		12
 #define NO_RAMP_CYCLE	2
 
-#define ACCELERATION	5
+#define ACCELERATION	6
 #define INITIAL_PERIOD	1000
 /* USER CODE END Private defines */
 

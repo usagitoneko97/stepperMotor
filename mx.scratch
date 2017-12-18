@@ -9,9 +9,6 @@
 
 <filestoremove>
 	<file>
-	   		<name>..\Src\main.c</name>
-	   		<name>..\Src\stm32f1xx_it.c</name>
-	   		<name>..\Src\stm32f1xx_hal_msp.c</name>
 	</file>
 </filestoremove>
 

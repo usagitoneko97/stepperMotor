@@ -19,7 +19,9 @@ Src/system_stm32f1xx.o: ../Src/system_stm32f1xx.c \
  C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_cortex.h \
  C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h \
  C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h \
- C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
+ C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h \
+ C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h \
+ C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 
 C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f1xx.h:
 
@@ -62,3 +64,7 @@ C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm
 C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h:
 
 C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h:
+
+C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h:
+
+C:/Users/User_Lenovo/workspace/stepperMotor/Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h:

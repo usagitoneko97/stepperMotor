@@ -36,7 +36,6 @@
   ******************************************************************************
   */
 /* Includes ------------------------------------------------------------------*/
-#include <stdint.h>
 #include "main.h"
 #include "stm32f1xx_hal.h"
 
@@ -45,24 +44,32 @@
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+int initialValue;
+int delayValue;
+int loopFlag = 0;
+float period;
+int initialDelay;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_TIM2_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 void rampMotorTo(int delayValue);
+void rampMotorExp(int delayValue, int initialValue);
+void rampMotorExpIt(int delayValue, int initialValue);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
 void delay(volatile unsigned int delay) {
- 	while(delay--);
+  	while(delay--);
 }
 
 
@@ -93,23 +100,37 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM2_Init();
 
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(GPIOA, motorEnable_Pin, GPIO_PIN_RESET);
+//  HAL_GPIO_WritePin(GPIOA, motorEnable_Pin, GPIO_PIN_RESET);
+//  HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  delay(10000000);
-  while (i)
+//  delay(10000000);
+//  rampMotorExpIt(750, 20000);
+//  HAL_TIM_Base_Start_IT(&htim2);
+  volatile int sysClkFreq = HAL_RCC_GetSysClockFreq();
+  while (1)
   {
-	rampMotorTo(750);
+	  //ramp up motor speed from 20000 to 750
+//	  rampMotorExp(15000, 20000);
+
 /*
     HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
     delay(5000);
     HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
     delay(5000);
+
 */
+
+//  if(loopFlag){
+	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
+	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+	  delay(sysClkFreq/9);
+//  }
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
@@ -171,6 +192,39 @@ void SystemClock_Config(void)
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
+/* TIM2 init function */
+static void MX_TIM2_Init(void)
+{
+
+  TIM_ClockConfigTypeDef sClockSourceConfig;
+  TIM_MasterConfigTypeDef sMasterConfig;
+
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 9;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 10000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
 /** Configure pins as 
         * Analog 
         * Input 
@@ -184,12 +238,21 @@ static void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct;
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, motorEnable_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(led1_GPIO_Port, led1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, motorStep_Pin|motorDir_Pin|motorEnable_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : led1_Pin */
+  GPIO_InitStruct.Pin = led1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(led1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : motorStep_Pin motorDir_Pin motorEnable_Pin */
   GPIO_InitStruct.Pin = motorStep_Pin|motorDir_Pin|motorEnable_Pin;
@@ -199,11 +262,35 @@ static void MX_GPIO_Init(void)
 
 }
 
-#define INITIAL_DELAY	10000
-#define RAMP_RATE		6
-#define NO_RAMP_CYCLE	2
-
 /* USER CODE BEGIN 4 */
+void xHAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+}
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+  int i;
+
+
+  if(period > delayValue){
+//	  for(i = 0; i < NO_RAMP_CYCLE; i++) {
+		HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+//		HAL_TIM_Base_Stop_IT(&htim2);
+//		htim2.Init.Period = period;
+//		HAL_TIM_Base_Init(&htim2);
+//		HAL_TIM_Base_Start_IT(&htim2);
+		htim2.Instance->ARR = period;
+
+//		delay(period);
+//	  }
+	  initialDelay += RAMP_RATE;
+	  period = 72000000 / (ACCELERATION * initialDelay);
+
+  }
+  else{
+	  loopFlag = 1;
+  }
+}
 void rampMotorTo(int delayValue) {
   uint32_t i, currentDelay = INITIAL_DELAY;
   while(currentDelay > delayValue) {
@@ -221,6 +308,38 @@ void rampMotorTo(int delayValue) {
     HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
     delay(delayValue);
   }
+}
+
+void rampMotorExp(int delayValue, int initialValue){
+  int i;
+  uint32_t initialDelay = 72000000 / (ACCELERATION * initialValue);
+
+  float period = initialValue;
+  while(period > delayValue){
+	  for(i = 0; i < NO_RAMP_CYCLE; i++) {
+		HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+		delay(period);
+	  }
+	  initialDelay += RAMP_RATE;
+	  period = 72000000 / (ACCELERATION * initialDelay);
+
+  }
+  while(1) {
+    HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+    delay(period);
+  }
+}
+
+void rampMotorExpIt(int delayValuei, int initialValuei){
+	initialDelay = 72000000 / (ACCELERATION * initialValue);
+	delayValue = delayValuei;
+	initialValue = initialValuei;
+	period = initialValue;
+	htim2.Init.Period = initialValuei;
+	HAL_TIM_Base_Init(&htim2);
+	HAL_TIM_Base_Start_IT(&htim2);
 }
 /* USER CODE END 4 */
 
