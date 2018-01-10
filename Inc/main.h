@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * File Name          : main.h
+  * File Name          : main.hpp
   * Description        : This file contains the common defines of the application
   ******************************************************************************
   ** This notice applies to any and all portions of this file
@@ -9,7 +9,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2017 STMicroelectronics
+  * COPYRIGHT(c) 2018 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -40,20 +40,38 @@
 #define __MAIN_H
   /* Includes ------------------------------------------------------------------*/
 
+/* Includes ------------------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#define IS_MOTOR_ACTIVE(x)      ((x).reloadPeriod != -1)
 
+typedef struct MotorInfo MotorInfo;
+struct MotorInfo {
+	unsigned long stepPeriod;
+	unsigned long reloadPeriod;
+	unsigned long expDelay;
+	unsigned long prevStepPeriod;
+};
 /* USER CODE END Includes */
 
 /* Private define ------------------------------------------------------------*/
 
 #define led1_Pin GPIO_PIN_13
 #define led1_GPIO_Port GPIOC
-#define motorStep_Pin GPIO_PIN_0
-#define motorStep_GPIO_Port GPIOA
+#define leftMotor_Pin GPIO_PIN_0
+#define leftMotor_GPIO_Port GPIOA
 #define motorDir_Pin GPIO_PIN_1
 #define motorDir_GPIO_Port GPIOA
 #define motorEnable_Pin GPIO_PIN_2
 #define motorEnable_GPIO_Port GPIOA
+#define rightMotor_Pin GPIO_PIN_3
+#define rightMotor_GPIO_Port GPIOA
+
+/* ########################## Assert Selection ############################## */
+/**
+  * @brief Uncomment the line below to expanse the "assert_param" macro in the 
+  *        HAL drivers code
+  */
+/* #define USE_FULL_ASSERT    1U */
 
 /* USER CODE BEGIN Private defines */
 #define motorStep_Pin GPIO_PIN_0
@@ -64,16 +82,22 @@
 #define motorEnable_GPIO_Port GPIOA
 
 #define INITIAL_DELAY	1000
-#define RAMP_RATE		12
+#define RAMP_RATE		4
 #define NO_RAMP_CYCLE	2
 
-#define ACCELERATION	6
+#define ACCELERATION	3
 #define INITIAL_PERIOD	1000
 /* USER CODE END Private defines */
 
+#ifdef __cplusplus
+ extern "C" {
+#endif
 void _Error_Handler(char *, int);
 
 #define Error_Handler() _Error_Handler(__FILE__, __LINE__)
+#ifdef __cplusplus
+}
+#endif
 
 /**
   * @}

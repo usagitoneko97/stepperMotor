@@ -41,10 +41,20 @@
   /* Includes ------------------------------------------------------------------*/
 
 /* USER CODE BEGIN Includes */
+#define IS_MOTOR_ACTIVE(x)      ((x).reloadPeriod != -1)
 
+typedef struct MotorInfo MotorInfo;
+struct MotorInfo {
+	unsigned long stepPeriod;
+	unsigned long reloadPeriod;
+	unsigned long expDelay;
+};
 /* USER CODE END Includes */
 
 /* Private define ------------------------------------------------------------*/
+
+
+
 
 #define led1_Pin GPIO_PIN_13
 #define led1_GPIO_Port GPIOC
@@ -64,10 +74,10 @@
 #define motorEnable_GPIO_Port GPIOA
 
 #define INITIAL_DELAY	1000
-#define RAMP_RATE		12
+#define RAMP_RATE		8
 #define NO_RAMP_CYCLE	2
 
-#define ACCELERATION	5
+#define ACCELERATION	3
 #define INITIAL_PERIOD	1000
 /* USER CODE END Private defines */
 

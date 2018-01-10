@@ -9,7 +9,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2017 STMicroelectronics
+  * COPYRIGHT(c) 2018 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -35,6 +35,7 @@
   *
   ******************************************************************************
   */
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_hal.h"
@@ -53,6 +54,8 @@ int delayValue;
 int loopFlag = 0;
 int period;
 int initialDelay;
+
+MotorInfo rightMotorInfo, leftMotorInfo;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,6 +68,8 @@ static void MX_TIM2_Init(void);
 void rampMotorTo(int delayValue);
 void rampMotorExp(int delayValue, int initialValue);
 void rampMotorExpIt(int delayValue, int initialValue);
+void pulsePin(int pin);
+void pulseMotorOnTimeout(MotorInfo *motor);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -107,18 +112,58 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  rampMotorExpIt(750, 20000);
+//  rampMotorExp(750, 20000);
+//  rampMotorTo(750);
+  leftMotorInfo.reloadPeriod = 800;
+  leftMotorInfo.stepPeriod = 20000;
+  leftMotorInfo.prevStepPeriod= 20000;
+  leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.stepPeriod);
+
+  rightMotorInfo.reloadPeriod = 2500;
+  rightMotorInfo.stepPeriod = 15000;
+  rightMotorInfo.prevStepPeriod= 15000;
+  rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.stepPeriod);
+
+  htim2.Init.Period = rightMotorInfo.stepPeriod;
+  HAL_TIM_Base_Init(&htim2);
+  HAL_TIM_Base_Start_IT(&htim2);
   while (1)
   {
 
-  if(loopFlag){
+	  //few things to update when android command comes:
+	  // 1.
+	  HAL_Delay(3000);
+	  leftMotorInfo.reloadPeriod = 20000;
+	  rightMotorInfo.reloadPeriod = 20000;
+	  rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+	  leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+
+	  HAL_Delay(1000);
+	  leftMotorInfo.reloadPeriod = 2500;
+	  rightMotorInfo.reloadPeriod = 750;
+	  rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+	  leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+	  HAL_Delay(3000);
+  /*if(loopFlag){
 	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
 	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
 	  delay(750);
-  }
+  }*/
+//	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
+//	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+//	  delay(15000);
+//	  rampMotorExpIt(750, 20000);
+//	  HAL_Delay(500);
+//	  rampMotorExpIt(20000, 750);
+//	  HAL_Delay(500);
+//	  rampMotorExpIt(750, 2500);
+//	  HAL_Delay(500);
+
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
+//	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+//	  HAL_GPIO_WritePin(GPIOA, motorEnable_Pin, GPIO_PIN_SET);
 
   }
 
@@ -231,7 +276,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(led1_GPIO_Port, led1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, motorStep_Pin|motorDir_Pin|motorEnable_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, leftMotor_Pin|motorDir_Pin|motorEnable_Pin|rightMotor_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : led1_Pin */
   GPIO_InitStruct.Pin = led1_Pin;
@@ -239,11 +284,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(led1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : motorStep_Pin motorDir_Pin motorEnable_Pin */
-  GPIO_InitStruct.Pin = motorStep_Pin|motorDir_Pin|motorEnable_Pin;
+  /*Configure GPIO pins : leftMotor_Pin motorDir_Pin motorEnable_Pin */
+  GPIO_InitStruct.Pin = leftMotor_Pin|motorDir_Pin|motorEnable_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : rightMotor_Pin */
+  GPIO_InitStruct.Pin = rightMotor_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(rightMotor_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -252,8 +303,39 @@ void xHAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
 }
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-  int i;
+	pulseMotorOnTimeout(&leftMotorInfo);
+	pulseMotorOnTimeout(&rightMotorInfo);
+
+  int numOfActive = 0;
+   unsigned long timeout;
+
+   timeout = leftMotorInfo.stepPeriod;
+   timeout = timeout <= rightMotorInfo.stepPeriod ? timeout : rightMotorInfo.stepPeriod;
+ //  printf("timeout = %d\n", timeout);
+   if(IS_MOTOR_ACTIVE(leftMotorInfo)){
+
+	   leftMotorInfo.stepPeriod -= timeout;
+	   numOfActive++;
+   }
+   if(IS_MOTOR_ACTIVE(rightMotorInfo)){
+
+	   rightMotorInfo.stepPeriod -= timeout;
+	   numOfActive++;
+   }
+   if(numOfActive > 0)
+	   htim2.Instance->ARR = timeout;
+//     timer0_write(ESP.getCycleCount() + timeout);
+    else{
+//     printf("detach called");
+//     timer0_detachInterrupt();
+//     isTimerOn = 0;
+    }
+
+
+
+  /*int i;
   if(period > delayValue){
 
 	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
@@ -264,8 +346,49 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   }
   else{
 	  loopFlag = 1;
+  }*/
+}
+
+void pulseMotorOnTimeout(MotorInfo *motor){
+//   if( motor->stepPeriod[0] < 2000 && motor->reloadPeriod != 0){
+//     pulsePin(motor->motorControlPin);
+//     motor->stepPeriod[0] += motor->reloadPeriod;
+//   }
+
+ if( motor->stepPeriod < 2000 && motor->reloadPeriod != 0){
+  if(motor == &leftMotorInfo)
+    pulsePin(leftMotor_Pin);
+   else
+    pulsePin(rightMotor_Pin);
+
+
+//   motor->stepPeriod += motor->reloadPeriod;
+  //replace direct reload of the reloadPeriod to accelerate the step period
+  if(motor->prevStepPeriod > motor->reloadPeriod){
+	  motor->expDelay += RAMP_RATE;
+	  motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
+	  motor->stepPeriod += motor->prevStepPeriod;
+  }
+  else{
+	  motor->stepPeriod += motor->reloadPeriod;
+	  motor->prevStepPeriod = motor->stepPeriod;
+	  //calculate expDelay so that the when next speed request is fasterm expDelay can be used straight away
+  }
   }
 }
+
+void pulsePin(int pin){
+	HAL_GPIO_WritePin(GPIOA, pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, pin, GPIO_PIN_RESET);
+}
+
+// 1. android update speed and angle
+// 2. calculate related leftmotor and right motor reloadPeriod
+// 3. accelerate/deaccelerate both motor at the same acceleration to reach the reload period
+
+// TEST1.
+
+
 void rampMotorTo(int delayValue) {
   uint32_t i, currentDelay = INITIAL_DELAY;
   while(currentDelay > delayValue) {
@@ -289,7 +412,7 @@ void rampMotorExp(int delayValue, int initialValue){
   int i;
   uint32_t initialDelay = 72000000 / (ACCELERATION * initialValue);
 
-  float period = initialValue;
+  uint32_t period = initialValue;
   while(period > delayValue){
 	  for(i = 0; i < NO_RAMP_CYCLE; i++) {
 		HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
@@ -316,6 +439,7 @@ void rampMotorExpIt(int delayValuei, int initialValuei){
 	HAL_TIM_Base_Init(&htim2);
 	HAL_TIM_Base_Start_IT(&htim2);
 }
+
 /* USER CODE END 4 */
 
 /**
