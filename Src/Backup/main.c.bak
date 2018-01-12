@@ -9,7 +9,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2017 STMicroelectronics
+  * COPYRIGHT(c) 2018 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -35,6 +35,7 @@
   *
   ******************************************************************************
   */
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_hal.h"
@@ -67,6 +68,12 @@ static void MX_TIM2_Init(void);
 void rampMotorTo(int delayValue);
 void rampMotorExp(int delayValue, int initialValue);
 void rampMotorExpIt(int delayValue, int initialValue);
+void pulsePin(int pin);
+void pulseMotorOnTimeout(MotorInfo *motor);
+//void Calculation(AngleSpeed *MainInfo , MotorInfo *leftMotor , MotorInfo *rightMotor);
+void calculation(AngleSpeed *MainInfo , MotorInfo *leftMotor , MotorInfo *rightMotor);
+int getSlowRatio(int angle);
+int getQuadrant(int angle);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -110,9 +117,59 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 //  rampMotorExp(750, 20000);
-  rampMotorTo(750);
+//  rampMotorTo(750);
+  /*leftMotorInfo.reloadPeriod = 800;
+  leftMotorInfo.stepPeriod = 20000;
+  leftMotorInfo.prevStepPeriod= 20000;
+  leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.stepPeriod);
+
+  rightMotorInfo.reloadPeriod = 2500;
+  rightMotorInfo.stepPeriod = 15000;
+  rightMotorInfo.prevStepPeriod= 15000;
+  rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.stepPeriod);
+
+  htim2.Init.Period = rightMotorInfo.stepPeriod;
+  HAL_TIM_Base_Init(&htim2);
+  HAL_TIM_Base_Start_IT(&htim2);*/
+
+
+  leftMotorInfo.stepPeriod = 20000;
+  leftMotorInfo.prevStepPeriod= 20000;
+
+  rightMotorInfo.stepPeriod = 20000;
+  rightMotorInfo.prevStepPeriod= 20000;
+
+  AngleSpeed angleSpeed = {.Speed=10, .Angle=0};
+  calculation(&angleSpeed, &leftMotorInfo, &rightMotorInfo);
+
+
+  htim2.Init.Period = rightMotorInfo.stepPeriod;
+  HAL_TIM_Base_Init(&htim2);
+  HAL_TIM_Base_Start_IT(&htim2);
   while (1)
   {
+	  HAL_Delay(3000);
+	  AngleSpeed angleSpeed = {.Speed=100, .Angle=90};
+	  calculation(&angleSpeed, &leftMotorInfo, &rightMotorInfo);
+
+	  rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+	  leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+
+	  //few things to update when android command comes:
+	  // 1.
+	  /*HAL_Delay(3000);
+	  leftMotorInfo.reloadPeriod = 20000;
+	  rightMotorInfo.reloadPeriod = 20000;
+	  rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+	  leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+
+	  HAL_Delay(1000);
+	  leftMotorInfo.reloadPeriod = 2500;
+	  rightMotorInfo.reloadPeriod = 750;
+	  rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+	  leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+	  HAL_Delay(3000);*/
+
 
   /*if(loopFlag){
 	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
@@ -132,8 +189,8 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
-	  HAL_GPIO_WritePin(GPIOA, motorEnable_Pin, GPIO_PIN_SET);
+//	  HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
+//	  HAL_GPIO_WritePin(GPIOA, motorEnable_Pin, GPIO_PIN_SET);
 
   }
 
@@ -246,7 +303,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(led1_GPIO_Port, led1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, motorStep_Pin|motorDir_Pin|motorEnable_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, leftMotor_Pin|motorDir_Pin|motorEnable_Pin|rightMotor_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : led1_Pin */
   GPIO_InitStruct.Pin = led1_Pin;
@@ -254,11 +311,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(led1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : motorStep_Pin motorDir_Pin motorEnable_Pin */
-  GPIO_InitStruct.Pin = motorStep_Pin|motorDir_Pin|motorEnable_Pin;
+  /*Configure GPIO pins : leftMotor_Pin motorDir_Pin motorEnable_Pin */
+  GPIO_InitStruct.Pin = leftMotor_Pin|motorDir_Pin|motorEnable_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : rightMotor_Pin */
+  GPIO_InitStruct.Pin = rightMotor_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(rightMotor_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -267,19 +330,10 @@ void xHAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(GPIOA, motorStep_Pin, GPIO_PIN_RESET);
 }
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	pulseMotorOnTimeout(&leftMotorInfo);
 	pulseMotorOnTimeout(&rightMotorInfo);
-
-  if(leftMotorInfo.stepPeriod > leftMotorInfo.reloadPeriod){
-	  leftMotorInfo.expDelay += RAMP_RATE;
-	  leftMotorInfo.stepPeriod = 72000000 / (ACCELERATION * leftMotorInfo.expDelay);
-  }
-  if(rightMotorInfo.stepPeriod > rightMotorInfo.reloadPeriod){
-	  rightMotorInfo.expDelay += RAMP_RATE;
-	  rightMotorInfo.stepPeriod = 72000000 / (ACCELERATION * rightMotorInfo.expDelay);
-  }
 
   int numOfActive = 0;
    unsigned long timeout;
@@ -288,18 +342,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
    timeout = timeout <= rightMotorInfo.stepPeriod ? timeout : rightMotorInfo.stepPeriod;
  //  printf("timeout = %d\n", timeout);
    if(IS_MOTOR_ACTIVE(leftMotorInfo)){
-    leftMotorInfo.stepPeriod -= timeout;
-    numOfActive++;
+
+	   leftMotorInfo.stepPeriod -= timeout;
+	   numOfActive++;
    }
    if(IS_MOTOR_ACTIVE(rightMotorInfo)){
-    rightMotorInfo.stepPeriod -= timeout;
-    numOfActive++;
+
+	   rightMotorInfo.stepPeriod -= timeout;
+	   numOfActive++;
    }
    if(numOfActive > 0)
 	   htim2.Instance->ARR = timeout;
 //     timer0_write(ESP.getCycleCount() + timeout);
     else{
-     printf("detach called");
+//     printf("detach called");
 //     timer0_detachInterrupt();
 //     isTimerOn = 0;
     }
@@ -325,12 +381,30 @@ void pulseMotorOnTimeout(MotorInfo *motor){
 //     pulsePin(motor->motorControlPin);
 //     motor->stepPeriod[0] += motor->reloadPeriod;
 //   }
- if( motor->stepPeriod[0] < 2000 && motor->reloadPeriod != 0){
+ if( motor->stepPeriod < 2000 && motor->reloadPeriod != 0){
   if(motor == &leftMotorInfo)
-    pulsePin(MOTOR_LEFT_STEP_PIN);
+    pulsePin(leftMotor_Pin);
    else
-    pulsePin(MOTOR_RIGHT_STEP_PIN);
-   motor->stepPeriod[0] += motor->reloadPeriod;
+    pulsePin(rightMotor_Pin);
+
+
+//   motor->stepPeriod += motor->reloadPeriod;
+  //replace direct reload of the reloadPeriod to accelerate the step period
+  if(motor->prevStepPeriod > (motor->reloadPeriod + THRESHOLD_GAP)){
+	  motor->expDelay += RAMP_RATE;
+	  motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
+	  motor->stepPeriod += motor->prevStepPeriod;
+  }
+  else if(motor->prevStepPeriod < (motor->reloadPeriod - THRESHOLD_GAP)){
+	  motor->expDelay -= RAMP_RATE;
+	  motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
+	  motor->stepPeriod += motor->prevStepPeriod;
+  }
+  else{
+	  motor->stepPeriod += motor->reloadPeriod;
+	  motor->prevStepPeriod = motor->stepPeriod;
+	  //calculate expDelay so that the when next speed request is fasterm expDelay can be used straight away
+  }
   }
 }
 
@@ -395,6 +469,105 @@ void rampMotorExpIt(int delayValuei, int initialValuei){
 	htim2.Init.Period = initialValuei;
 	HAL_TIM_Base_Init(&htim2);
 	HAL_TIM_Base_Start_IT(&htim2);
+}
+
+void Calculation(AngleSpeed *MainInfo , MotorInfo *leftMotor , MotorInfo *rightMotor){
+
+    if(MainInfo->previousSpeed != MainInfo->Speed || MainInfo->previousAngle != MainInfo->Angle)
+    {
+     // Serial.println("new speed and angle");
+      //Serial.println("new speed and angle");
+      //Serial.println(MainInfo->Speed);
+      //Serial.println(MainInfo->Angle);
+//        enableMotor();
+
+      MainInfo->previousSpeed = MainInfo->Speed;
+      MainInfo->previousAngle = MainInfo->Angle;
+      int max_period;
+      float tempAngle;
+
+     if(MainInfo->Speed == 0.0)
+      {
+//      ForceStop(leftMotor ,rightMotor);
+      }
+      else{
+//        enableMotor();
+        }
+
+      if( MainInfo->Angle >= 180)
+       {
+         tempAngle = 360 - MainInfo->Angle;
+         leftMotor->dir = MOTOR_LEFT_BACKWARD;
+         rightMotor->dir = MOTOR_RIGHT_BACKWARD;
+       }
+       else{
+        tempAngle = MainInfo->Angle;
+        leftMotor->dir = MOTOR_LEFT_FOWARD;
+        rightMotor->dir = MOTOR_RIGHT_FOWARD;
+       }
+
+      max_period = (80000 / MainInfo->Speed);
+      leftMotor->reloadPeriod = ( max_period * ( tempAngle/180) ) + 200 ;
+      rightMotor->reloadPeriod= ( max_period - ( max_period * ( tempAngle/180) ) ) + 200 ;
+      }
+}
+
+void calculation(AngleSpeed *MainInfo , MotorInfo *leftMotor , MotorInfo *rightMotor){
+	int maxPeriod = MOTOR_MAX_PERIOD/(MainInfo->Speed/100.00);
+
+    int acute, ratio;
+    int quadrant = getQuadrant(MainInfo->Angle);
+    switch(quadrant){
+        case 1:
+            acute = 90-(MainInfo->Angle);
+            acute = acute == 0?1:acute;
+            ratio = getSlowRatio(acute);
+            //left wheel will be fast, right wheel will be slow
+            leftMotor->reloadPeriod = maxPeriod;
+            rightMotor->reloadPeriod = ratio * maxPeriod;
+            leftMotor->dir = MOTOR_LEFT_FOWARD;
+            rightMotor->dir = MOTOR_RIGHT_FOWARD;
+            break;
+        case 2:
+            acute = 90-(180 - MainInfo->Angle);
+            acute = acute == 0?1:acute;
+            ratio = getSlowRatio(acute);
+            leftMotor->reloadPeriod = maxPeriod;
+            rightMotor->reloadPeriod = ratio * maxPeriod;
+            leftMotor->dir = MOTOR_LEFT_BACKWARD;
+            rightMotor->dir = MOTOR_RIGHT_BACKWARD;
+            break;
+        case 3:
+            acute = 90-(MainInfo->Angle - 180);
+            acute = acute == 0?1:acute;
+            ratio = getSlowRatio(acute);
+            rightMotor->reloadPeriod = maxPeriod;
+            leftMotor->reloadPeriod = ratio * maxPeriod;
+            leftMotor->dir = MOTOR_LEFT_BACKWARD;
+            rightMotor->dir = MOTOR_RIGHT_BACKWARD;
+            break;
+        case 4:
+            acute = 90-(360 - MainInfo->Angle);
+            acute = acute == 0?1:acute;
+            ratio = getSlowRatio(acute);
+            rightMotor->reloadPeriod = maxPeriod;
+            leftMotor->reloadPeriod = ratio * maxPeriod;
+            leftMotor->dir = MOTOR_LEFT_FOWARD;
+            rightMotor->dir = MOTOR_RIGHT_FOWARD;
+            break;
+    }
+    //expDelay needs to be reload here for some reason that needs investigate
+    leftMotor->expDelay = 72000000 / (ACCELERATION * leftMotor->stepPeriod);
+    rightMotor->expDelay = 72000000 / (ACCELERATION * rightMotor->stepPeriod);
+}
+
+int getSlowRatio(int angle)
+{
+    return 1/(angle/90.000);
+}
+
+int getQuadrant(int angle){
+    return (angle/90) + 1;
 }
 
 /* USER CODE END 4 */

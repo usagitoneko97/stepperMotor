@@ -50,7 +50,27 @@ struct MotorInfo {
 	unsigned long reloadPeriod;
 	unsigned long expDelay;
 	unsigned long prevStepPeriod;
+	int dir;
+	int curDir;
 };
+
+typedef struct AngleSpeed AngleSpeed;
+struct  AngleSpeed {
+  float Speed;
+  float Angle;
+  float previousAngle;
+  float previousSpeed;
+};
+
+#define MOTOR_LEFT_FOWARD       1
+#define MOTOR_LEFT_BACKWARD     0
+#define MOTOR_RIGHT_FOWARD      0
+#define MOTOR_RIGHT_BACKWARD    1
+
+#define THRESHOLD_GAP 			15
+
+#define MINIMUM_ANGLE 		1
+#define MOTOR_MAX_PERIOD	1500
 /* USER CODE END Includes */
 
 /* Private define ------------------------------------------------------------*/
@@ -59,12 +79,14 @@ struct MotorInfo {
 #define led1_GPIO_Port GPIOC
 #define leftMotor_Pin GPIO_PIN_0
 #define leftMotor_GPIO_Port GPIOA
-#define motorDir_Pin GPIO_PIN_1
-#define motorDir_GPIO_Port GPIOA
+#define leftMotorDir_Pin GPIO_PIN_1
+#define leftMotorDir_GPIO_Port GPIOA
 #define motorEnable_Pin GPIO_PIN_2
 #define motorEnable_GPIO_Port GPIOA
 #define rightMotor_Pin GPIO_PIN_3
 #define rightMotor_GPIO_Port GPIOA
+#define rightMotorDir_Pin GPIO_PIN_4
+#define rightMotorDir_GPIO_Port GPIOA
 
 /* ########################## Assert Selection ############################## */
 /**
@@ -82,10 +104,10 @@ struct MotorInfo {
 #define motorEnable_GPIO_Port GPIOA
 
 #define INITIAL_DELAY	1000
-#define RAMP_RATE		4
+#define RAMP_RATE		8
 #define NO_RAMP_CYCLE	2
 
-#define ACCELERATION	3
+#define ACCELERATION	20
 #define INITIAL_PERIOD	1000
 /* USER CODE END Private defines */
 
