@@ -6,10 +6,10 @@ ESP8266WebServer server(80);
 // define pin
 //#define DEVELOP
 #define MOTOR_ENABLE_PIN 10
-#define MOTOR_LEFT_STEP_PIN 4 //d2
-#define MOTOR_LEFT_DIR_PIN 5  //d1
-#define MOTOR_RIGHT_STEP_PIN 0  //d3
-#define MOTOR_RIGHT_DIR_PIN 2   //d4
+#define MOTOR_LEFT_STEP_PIN 5   //d1
+#define MOTOR_LEFT_DIR_PIN 4    //d2
+#define MOTOR_RIGHT_STEP_PIN 2  //d4
+#define MOTOR_RIGHT_DIR_PIN 0   //d3
 #define MOTOR_LEFT_FOWARD 1
 #define MOTOR_LEFT_BACKWARD 0
 #define MOTOR_RIGHT_FOWARD 0
@@ -17,7 +17,7 @@ ESP8266WebServer server(80);
 
 
 #define INITIAL_DELAY  1000
-#define RAMP_RATE     5
+#define RAMP_RATE     2
 #define NO_RAMP_CYCLE 2
 
 #define ACCELERATION  0.5
@@ -25,10 +25,12 @@ ESP8266WebServer server(80);
 #define THRESHOLD_GAP       15
 #define MINIMUM_ANGLE     1
 #define MIN_SPEED         1
-#define MOTOR_MAX_PERIOD  10000
+#define MOTOR_MAX_PERIOD  12500
 
 #define ENABLE LOW
 #define DISABLE HIGH
+
+#define STOP_PERIOD (MOTOR_MAX_PERIOD * 100)
 
 #define _1u 80
 #define IS_MOTOR_ACTIVE(x) ((x).reloadPeriod != -1)
@@ -161,15 +163,20 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       digitalWrite(MOTOR_RIGHT_DIR_PIN , rightMotorInfo.curDir);
     }
 
-    if (motor->prevStepPeriod > 56000) {
+    if (motor->prevStepPeriod > STOP_PERIOD) {
       motor->curDir = motor->dir;
     }
     if (motor->curDir != motor->dir) {
       //ramp to zero
-      motor->expDelay -= RAMP_RATE * 2; //ramp faster
+      motor->expDelay -= RAMP_RATE; //ramp faster
       motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
       motor->stepPeriod += motor->prevStepPeriod;
     } else {
+      if(motor->prevStepPeriod >= STOP_PERIOD){
+        disableMotor();
+        isTimerOn = 0;
+        return;
+      }
       if (motor->prevStepPeriod > (motor->reloadPeriod + THRESHOLD_GAP)) {
         motor->expDelay += RAMP_RATE;
         motor->prevStepPeriod = 72000000
@@ -268,6 +275,7 @@ int getQuadrant(int angle){
 
 void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
                  MotorInfo *rightMotor) {
+
   int maxSpeed = MainInfo->Speed == 0? MIN_SPEED:MainInfo->Speed;
   int maxPeriod = MOTOR_MAX_PERIOD / (maxSpeed/ 100.00);
 
@@ -348,7 +356,8 @@ void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
     Serial.print("angle = ");
     Serial.println(info->Angle);
     Calculation(info, leftMotor, rightMotor);
-    if (!isTimerOn) {
+    if (!isTimerOn && info->Speed > 0) {
+      enableMotor();
       leftMotorInfo.curDir = MOTOR_LEFT_FOWARD;
       rightMotorInfo.curDir = MOTOR_RIGHT_FOWARD;
       timer0_attachInterrupt(leftMotorStep_test);

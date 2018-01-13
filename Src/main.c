@@ -132,6 +132,7 @@ int main(void) {
 	 HAL_TIM_Base_Init(&htim2);
 	 HAL_TIM_Base_Start_IT(&htim2);*/
 
+	HAL_GPIO_WritePin(motorEnable_GPIO_Port, motorEnable_Pin, 0);
 	leftMotorInfo.stepPeriod = 67500;
 	leftMotorInfo.prevStepPeriod = 67500;
 
