@@ -17,14 +17,15 @@ ESP8266WebServer server(80);
 
 
 #define INITIAL_DELAY  1000
-#define RAMP_RATE     2
+#define RAMP_RATE     5
 #define NO_RAMP_CYCLE 2
 
 #define ACCELERATION  0.5
 #define INITIAL_PERIOD  1000
 #define THRESHOLD_GAP       15
 #define MINIMUM_ANGLE     1
-#define MOTOR_MAX_PERIOD  15000
+#define MIN_SPEED         1
+#define MOTOR_MAX_PERIOD  10000
 
 #define ENABLE LOW
 #define DISABLE HIGH
@@ -267,7 +268,8 @@ int getQuadrant(int angle){
 
 void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
                  MotorInfo *rightMotor) {
-  int maxPeriod = MOTOR_MAX_PERIOD / (MainInfo->Speed / 100.00);
+  int maxSpeed = MainInfo->Speed == 0? MIN_SPEED:MainInfo->Speed;
+  int maxPeriod = MOTOR_MAX_PERIOD / (maxSpeed/ 100.00);
 
   int acute, ratio;
   int quadrant = getQuadrant(MainInfo->Angle);
@@ -279,8 +281,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       // left wheel will be fast, right wheel will be slow
       leftMotor->reloadPeriod = maxPeriod;
       rightMotor->reloadPeriod = ratio * maxPeriod;
-      leftMotor->dir = 1;
-      rightMotor->dir = 1;
+      leftMotor->dir = MOTOR_LEFT_FOWARD;
+      rightMotor->dir = MOTOR_RIGHT_FOWARD;
       break;
     case 2:
       acute = 90 - (180 - MainInfo->Angle);
@@ -288,8 +290,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       leftMotor->reloadPeriod = maxPeriod;
       rightMotor->reloadPeriod = ratio * maxPeriod;
-      leftMotor->dir = 0;
-      rightMotor->dir = 0;
+      leftMotor->dir = MOTOR_LEFT_BACKWARD;
+      rightMotor->dir = MOTOR_RIGHT_BACKWARD;
       break;
     case 3:
       acute = 90 - (MainInfo->Angle - 180);
@@ -297,8 +299,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       rightMotor->reloadPeriod = maxPeriod;
       leftMotor->reloadPeriod = ratio * maxPeriod;
-      leftMotor->dir = 0;
-      rightMotor->dir = 0;
+      leftMotor->dir = MOTOR_LEFT_BACKWARD;
+      rightMotor->dir = MOTOR_RIGHT_BACKWARD;
       break;
     case 4:
       acute = 90 - (360 - MainInfo->Angle);
@@ -306,8 +308,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       rightMotor->reloadPeriod = maxPeriod;
       leftMotor->reloadPeriod = ratio * maxPeriod;
-      leftMotor->dir = 1;
-      rightMotor->dir = 1;
+      leftMotor->dir = MOTOR_LEFT_FOWARD;
+      rightMotor->dir = MOTOR_RIGHT_FOWARD;
       break;
   }
   // expDelay needs to be reload here for some reason that needs investigate
@@ -347,6 +349,8 @@ void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
     Serial.println(info->Angle);
     Calculation(info, leftMotor, rightMotor);
     if (!isTimerOn) {
+      leftMotorInfo.curDir = MOTOR_LEFT_FOWARD;
+      rightMotorInfo.curDir = MOTOR_RIGHT_FOWARD;
       timer0_attachInterrupt(leftMotorStep_test);
       Serial.println("timer on!");
       isTimerOn = 1;
