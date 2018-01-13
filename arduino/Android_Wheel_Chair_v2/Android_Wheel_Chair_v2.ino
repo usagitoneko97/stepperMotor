@@ -20,7 +20,7 @@ ESP8266WebServer server(80);
 #define RAMP_RATE     2
 #define NO_RAMP_CYCLE 2
 
-#define ACCELERATION  0.5
+#define ACCELERATION  2
 #define INITIAL_PERIOD  1000
 #define THRESHOLD_GAP       15
 #define MINIMUM_ANGLE     1
@@ -109,7 +109,6 @@ void setup() {
   leftMotorInfo.dir = MOTOR_LEFT_FOWARD;
   leftMotorInfo.steps = 0;
   leftMotorInfo.prevTime = 0;
-  disableMotor();
   WiFi.softAP(ssid, password, 1, 0 );
   handling(&instruction, &leftMotorInfo, &rightMotorInfo);
   //  handleUturn(&leftMotorInfo , &rightMotorInfo);
@@ -172,11 +171,14 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
       motor->stepPeriod += motor->prevStepPeriod;
     } else {
-      if(motor->prevStepPeriod >= STOP_PERIOD){
+      /*if(motor->prevStepPeriod >= STOP_PERIOD){
+        noInterrupts();
         disableMotor();
         isTimerOn = 0;
+        initMotor();
+    
         return;
-      }
+      }*/
       if (motor->prevStepPeriod > (motor->reloadPeriod + THRESHOLD_GAP)) {
         motor->expDelay += RAMP_RATE;
         motor->prevStepPeriod = 72000000
@@ -195,6 +197,27 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       }
     }
   }
+}
+
+void initMotor(){
+   rightMotorInfo.stepPeriod = 30000;
+   rightMotorInfo.prevStepPeriod = 30000;
+   rightMotorInfo.expDelay == 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+   rightMotorInfo.reloadPeriod = -1;
+  rightMotorInfo.motorControlPin = MOTOR_RIGHT_STEP_PIN;
+  rightMotorInfo.dirPin = MOTOR_RIGHT_DIR_PIN;
+  rightMotorInfo.dir = MOTOR_RIGHT_FOWARD;
+  rightMotorInfo.steps = 0;
+  rightMotorInfo.prevTime = 0;
+  leftMotorInfo.stepPeriod = 30000;
+  leftMotorInfo.prevStepPeriod = 30000;
+  leftMotorInfo.expDelay == 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+  leftMotorInfo.reloadPeriod = -1;
+  leftMotorInfo.motorControlPin = MOTOR_LEFT_STEP_PIN;
+  leftMotorInfo.dirPin = MOTOR_LEFT_DIR_PIN;
+  leftMotorInfo.dir = MOTOR_LEFT_FOWARD;
+  leftMotorInfo.steps = 0;
+  leftMotorInfo.prevTime = 0;
 }
 
 
