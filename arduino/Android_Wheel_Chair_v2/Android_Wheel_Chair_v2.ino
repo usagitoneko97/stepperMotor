@@ -17,6 +17,7 @@ ESP8266WebServer server(80);
 
 
 #define INITIAL_DELAY  1000
+
 #define RAMP_RATE     2
 #define NO_RAMP_CYCLE 2
 
@@ -34,6 +35,10 @@ ESP8266WebServer server(80);
 
 #define _1u 80
 #define IS_MOTOR_ACTIVE(x) ((x).reloadPeriod != -1)
+#define STOP_MOTOR()   do{                            \
+                        leftMotor->reloadPeriod = -1; \
+                        rightMotor->reloadPeriod = -1;\
+                        } while(0)
 
 const char *ssid = "test123";
 const char *password = "testing12345";
@@ -296,14 +301,23 @@ int getQuadrant(int angle){
     return (angle/90) + 1;
 }
 
+  
+
 void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
                  MotorInfo *rightMotor) {
 
-  int maxSpeed = MainInfo->Speed == 0? MIN_SPEED:MainInfo->Speed;
-  int maxPeriod = MOTOR_MAX_PERIOD / (maxSpeed/ 100.00);
+  int maxPeriod;
 
   int acute, ratio;
   int quadrant = getQuadrant(MainInfo->Angle);
+  if( MainInfo->Speed == 0){
+    leftMotor->reloadPeriod = STOP_PERIOD;
+    rightMotor->reloadPeriod = STOP_PERIOD;
+    return;
+  }
+  else{
+    maxPeriod = MOTOR_MAX_PERIOD / (MainInfo->Speed/ 100.00);
+  }
   switch (quadrant) {
     case 1:
       acute = 90 - (MainInfo->Angle);
