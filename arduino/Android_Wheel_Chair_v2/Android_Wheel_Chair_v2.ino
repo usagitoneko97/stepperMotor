@@ -10,10 +10,10 @@ ESP8266WebServer server(80);
 #define MOTOR_LEFT_DIR_PIN 4    //d2
 #define MOTOR_RIGHT_STEP_PIN 2  //d4
 #define MOTOR_RIGHT_DIR_PIN 0   //d3
-#define MOTOR_LEFT_FOWARD 1
-#define MOTOR_LEFT_BACKWARD 0
-#define MOTOR_RIGHT_FOWARD 0
-#define MOTOR_RIGHT_BACKWARD 1
+#define MOTOR_LEFT_FOWARD 0
+#define MOTOR_LEFT_BACKWARD 1
+#define MOTOR_RIGHT_FOWARD 1
+#define MOTOR_RIGHT_BACKWARD 0 
 
 
 #define INITIAL_DELAY  1000
@@ -64,6 +64,7 @@ struct MotorInfo {
   unsigned long reloadPeriod;
   unsigned long expDelay;
   unsigned long prevStepPeriod;
+  float acceleration;
   int motorControlPin;
   int dirPin;
   int dir;
@@ -121,7 +122,8 @@ void setup() {
   mAcceleration = 1;
   WiFi.softAP(ssid, password, 1, 0 );
   handling(&instruction, &leftMotorInfo, &rightMotorInfo);
-  //  handleUturn(&leftMotorInfo , &rightMotorInfo);
+  handleForceStop();
+  handleUturn(&leftMotorInfo , &rightMotorInfo);
   // handlingDebug(&leftMotorInfo , &rightMotorInfo);
   server.begin();
   IPAddress myIP = WiFi.softAPIP();
@@ -131,6 +133,21 @@ void setup() {
 
   interrupts();
   //  Serial.println(myIP);
+}
+
+void handleForceStop(){
+  server.on("/forcestop", [ = ](){
+    rightMotorInfo.reloadPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.reloadPeriod = MOTOR_MAX_PERIOD;
+    rightMotorInfo.stepPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.stepPeriod = MOTOR_MAX_PERIOD;
+    rightMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.expDelay = 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
+    rightMotorInfo.expDelay = 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
+    timer0_detachInterrupt();
+    isTimerOn = 0;
+  });
 }
 
 int TimerExpired(unsigned long duration, unsigned long previous) {
@@ -177,8 +194,8 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
     }
     if (motor->curDir != motor->dir) {
       //ramp to zero
-      motor->expDelay -= RAMP_RATE; //ramp faster
-      motor->prevStepPeriod = 72000000 / (mAcceleration * motor->expDelay);
+      motor->expDelay -= RAMP_RATE;
+      motor->prevStepPeriod = 72000000 / (motor->acceleration * motor->expDelay);
       motor->stepPeriod += motor->prevStepPeriod;
     } else {
       if(motor->prevStepPeriod >= STOP_PERIOD && motor->reloadPeriod >= STOP_PERIOD){
@@ -190,13 +207,13 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       if (motor->prevStepPeriod > (motor->reloadPeriod + THRESHOLD_GAP)) {
         motor->expDelay += RAMP_RATE;
         motor->prevStepPeriod = 72000000
-            / (mAcceleration * motor->expDelay);
+            / (motor->acceleration * motor->expDelay);
         motor->stepPeriod += motor->prevStepPeriod;
       } else if (motor->prevStepPeriod
           < (motor->reloadPeriod - THRESHOLD_GAP)) {
         motor->expDelay -= RAMP_RATE;
         motor->prevStepPeriod = 72000000
-            / (mAcceleration * motor->expDelay);
+            / (motor->acceleration * motor->expDelay);
         motor->stepPeriod += motor->prevStepPeriod;
       } else {
         motor->stepPeriod += motor->reloadPeriod;
@@ -310,7 +327,6 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
                  MotorInfo *rightMotor) {
 
   int maxPeriod;
-
   int acute, ratio;
   int quadrant = getQuadrant(MainInfo->Angle);
   if( MainInfo->Speed == 0){
@@ -329,6 +345,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       // left wheel will be fast, right wheel will be slow
       leftMotor->reloadPeriod = maxPeriod;
       rightMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration;
+      rightMotor->acceleration = mAcceleration / ratio;
       leftMotor->dir = MOTOR_LEFT_FOWARD;
       rightMotor->dir = MOTOR_RIGHT_FOWARD;
       break;
@@ -338,6 +356,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       leftMotor->reloadPeriod = maxPeriod;
       rightMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration;
+      rightMotor->acceleration = mAcceleration / ratio;
       leftMotor->dir = MOTOR_LEFT_BACKWARD;
       rightMotor->dir = MOTOR_RIGHT_BACKWARD;
       break;
@@ -347,6 +367,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       rightMotor->reloadPeriod = maxPeriod;
       leftMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration / ratio;
+      rightMotor->acceleration = mAcceleration;
       leftMotor->dir = MOTOR_LEFT_BACKWARD;
       rightMotor->dir = MOTOR_RIGHT_BACKWARD;
       break;
@@ -356,13 +378,15 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       rightMotor->reloadPeriod = maxPeriod;
       leftMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration / ratio;
+      rightMotor->acceleration = mAcceleration;
       leftMotor->dir = MOTOR_LEFT_FOWARD;
       rightMotor->dir = MOTOR_RIGHT_FOWARD;
       break;
   }
   // expDelay needs to be reload here for some reason that needs investigate
-  leftMotor->expDelay = 72000000 / (mAcceleration * leftMotor->prevStepPeriod);
-  rightMotor->expDelay = 72000000 / (mAcceleration * rightMotor->prevStepPeriod);
+  leftMotor->expDelay = 72000000 / (leftMotor->acceleration * leftMotor->prevStepPeriod);
+  rightMotor->expDelay = 72000000 / (rightMotor->acceleration * rightMotor->prevStepPeriod);
 }
 
 void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
