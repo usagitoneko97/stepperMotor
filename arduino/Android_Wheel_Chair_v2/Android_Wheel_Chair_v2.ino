@@ -120,7 +120,7 @@ void setup() {
   // handlingDebug(&leftMotorInfo , &rightMotorInfo);
   server.begin();
   IPAddress myIP = WiFi.softAPIP();
-  enableMotor();
+  disableMotor();
   noInterrupts();
   timer0_isr_init();
 
@@ -177,7 +177,7 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       motor->stepPeriod += motor->prevStepPeriod;
     } else {
       if(motor->prevStepPeriod >= STOP_PERIOD && motor->reloadPeriod >= STOP_PERIOD){
-        //disableMotor();
+        disableMotor();
         timer0_detachInterrupt();
         isTimerOn = 0;
         return;
