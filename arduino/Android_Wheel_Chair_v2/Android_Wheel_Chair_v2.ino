@@ -96,8 +96,8 @@ void setup() {
   pinMode(MOTOR_RIGHT_STEP_PIN, OUTPUT);
   pinMode(MOTOR_RIGHT_DIR_PIN, OUTPUT);
   pinMode(MOTOR_ENABLE_PIN, OUTPUT);
-  rightMotorInfo.stepPeriod = 30000;
-  rightMotorInfo.prevStepPeriod = 30000;
+  rightMotorInfo.stepPeriod = STOP_PERIOD;
+  rightMotorInfo.prevStepPeriod = STOP_PERIOD;
   rightMotorInfo.expDelay == 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
   rightMotorInfo.reloadPeriod = -1;
   rightMotorInfo.motorControlPin = MOTOR_RIGHT_STEP_PIN;
@@ -105,8 +105,8 @@ void setup() {
   rightMotorInfo.dir = MOTOR_RIGHT_FOWARD;
   rightMotorInfo.steps = 0;
   rightMotorInfo.prevTime = 0;
-  leftMotorInfo.stepPeriod = 30000;
-  leftMotorInfo.prevStepPeriod = 30000;
+  leftMotorInfo.stepPeriod = STOP_PERIOD;
+  leftMotorInfo.prevStepPeriod = STOP_PERIOD;
   leftMotorInfo.expDelay == 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
   leftMotorInfo.reloadPeriod = -1;
   leftMotorInfo.motorControlPin = MOTOR_LEFT_STEP_PIN;
@@ -176,14 +176,12 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
       motor->stepPeriod += motor->prevStepPeriod;
     } else {
-      /*if(motor->prevStepPeriod >= STOP_PERIOD){
-        noInterrupts();
-        disableMotor();
+      if(motor->prevStepPeriod >= STOP_PERIOD && motor->reloadPeriod >= STOP_PERIOD){
+        //disableMotor();
+        timer0_detachInterrupt();
         isTimerOn = 0;
-        initMotor();
-    
         return;
-      }*/
+      }
       if (motor->prevStepPeriod > (motor->reloadPeriod + THRESHOLD_GAP)) {
         motor->expDelay += RAMP_RATE;
         motor->prevStepPeriod = 72000000
@@ -394,9 +392,17 @@ void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
     Serial.println(info->Angle);
     Calculation(info, leftMotor, rightMotor);
     if (!isTimerOn && info->Speed > 0) {
+      leftMotorInfo.stepPeriod = leftMotorInfo.prevStepPeriod;
+      rightMotorInfo.stepPeriod = rightMotorInfo.prevStepPeriod;
+      rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+      leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+      /*leftMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
+      rightMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
+      rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+      leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);*/
       enableMotor();
-      leftMotorInfo.curDir = MOTOR_LEFT_FOWARD;
-      rightMotorInfo.curDir = MOTOR_RIGHT_FOWARD;
+      leftMotorInfo.curDir = leftMotorInfo.dir;
+      rightMotorInfo.curDir = rightMotorInfo.dir;
       timer0_attachInterrupt(leftMotorStep_test);
       Serial.println("timer on!");
       isTimerOn = 1;
