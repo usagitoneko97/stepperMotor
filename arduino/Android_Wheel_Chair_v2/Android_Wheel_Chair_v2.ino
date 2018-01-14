@@ -21,7 +21,8 @@ ESP8266WebServer server(80);
 #define RAMP_RATE     2
 #define NO_RAMP_CYCLE 2
 
-#define ACCELERATION  2
+#define MAX_ACCELERATION  4
+#define ACCELERATION      2
 #define INITIAL_PERIOD  1000
 #define THRESHOLD_GAP       15
 #define MINIMUM_ANGLE     1
@@ -46,6 +47,8 @@ volatile unsigned long next;
 volatile int previoustime = 0;
 volatile int motorDelay = 0;
 volatile int isTimerOn = 0;
+
+volatile float mAcceleration;
 /*#define updateIndex(x)    do {                              \
                     if((x)->updated == 1)                   \
                      {                                      \
@@ -81,12 +84,13 @@ typedef struct AngleSpeed AngleSpeed;
 struct AngleSpeed {
   float Speed;
   float Angle;
+  float Acceleration;
   float previousAngle;
   float previousSpeed;
 };
 
 AngleSpeed instruction = {
-  .Speed = 0.0, .Angle = 90.00, .previousAngle = 270, .previousSpeed = 0.0,
+  .Speed = 0.0, .Angle = 90.00, .Acceleration=0, .previousAngle = 270, .previousSpeed = 0.0
 };
 
 void setup() {
@@ -98,7 +102,7 @@ void setup() {
   pinMode(MOTOR_ENABLE_PIN, OUTPUT);
   rightMotorInfo.stepPeriod = STOP_PERIOD;
   rightMotorInfo.prevStepPeriod = STOP_PERIOD;
-  rightMotorInfo.expDelay == 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+  rightMotorInfo.expDelay == 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
   rightMotorInfo.reloadPeriod = -1;
   rightMotorInfo.motorControlPin = MOTOR_RIGHT_STEP_PIN;
   rightMotorInfo.dirPin = MOTOR_RIGHT_DIR_PIN;
@@ -107,13 +111,14 @@ void setup() {
   rightMotorInfo.prevTime = 0;
   leftMotorInfo.stepPeriod = STOP_PERIOD;
   leftMotorInfo.prevStepPeriod = STOP_PERIOD;
-  leftMotorInfo.expDelay == 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+  leftMotorInfo.expDelay == 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
   leftMotorInfo.reloadPeriod = -1;
   leftMotorInfo.motorControlPin = MOTOR_LEFT_STEP_PIN;
   leftMotorInfo.dirPin = MOTOR_LEFT_DIR_PIN;
   leftMotorInfo.dir = MOTOR_LEFT_FOWARD;
   leftMotorInfo.steps = 0;
   leftMotorInfo.prevTime = 0;
+  mAcceleration = 1;
   WiFi.softAP(ssid, password, 1, 0 );
   handling(&instruction, &leftMotorInfo, &rightMotorInfo);
   //  handleUturn(&leftMotorInfo , &rightMotorInfo);
@@ -173,7 +178,7 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
     if (motor->curDir != motor->dir) {
       //ramp to zero
       motor->expDelay -= RAMP_RATE; //ramp faster
-      motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
+      motor->prevStepPeriod = 72000000 / (mAcceleration * motor->expDelay);
       motor->stepPeriod += motor->prevStepPeriod;
     } else {
       if(motor->prevStepPeriod >= STOP_PERIOD && motor->reloadPeriod >= STOP_PERIOD){
@@ -185,13 +190,13 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       if (motor->prevStepPeriod > (motor->reloadPeriod + THRESHOLD_GAP)) {
         motor->expDelay += RAMP_RATE;
         motor->prevStepPeriod = 72000000
-            / (ACCELERATION * motor->expDelay);
+            / (mAcceleration * motor->expDelay);
         motor->stepPeriod += motor->prevStepPeriod;
       } else if (motor->prevStepPeriod
           < (motor->reloadPeriod - THRESHOLD_GAP)) {
         motor->expDelay -= RAMP_RATE;
         motor->prevStepPeriod = 72000000
-            / (ACCELERATION * motor->expDelay);
+            / (mAcceleration * motor->expDelay);
         motor->stepPeriod += motor->prevStepPeriod;
       } else {
         motor->stepPeriod += motor->reloadPeriod;
@@ -205,7 +210,7 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
 void initMotor(){
    rightMotorInfo.stepPeriod = 30000;
    rightMotorInfo.prevStepPeriod = 30000;
-   rightMotorInfo.expDelay == 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+   rightMotorInfo.expDelay == 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
    rightMotorInfo.reloadPeriod = -1;
   rightMotorInfo.motorControlPin = MOTOR_RIGHT_STEP_PIN;
   rightMotorInfo.dirPin = MOTOR_RIGHT_DIR_PIN;
@@ -214,7 +219,7 @@ void initMotor(){
   rightMotorInfo.prevTime = 0;
   leftMotorInfo.stepPeriod = 30000;
   leftMotorInfo.prevStepPeriod = 30000;
-  leftMotorInfo.expDelay == 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+  leftMotorInfo.expDelay == 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
   leftMotorInfo.reloadPeriod = -1;
   leftMotorInfo.motorControlPin = MOTOR_LEFT_STEP_PIN;
   leftMotorInfo.dirPin = MOTOR_LEFT_DIR_PIN;
@@ -356,8 +361,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       break;
   }
   // expDelay needs to be reload here for some reason that needs investigate
-  leftMotor->expDelay = 72000000 / (ACCELERATION * leftMotor->prevStepPeriod);
-  rightMotor->expDelay = 72000000 / (ACCELERATION * rightMotor->prevStepPeriod);
+  leftMotor->expDelay = 72000000 / (mAcceleration * leftMotor->prevStepPeriod);
+  rightMotor->expDelay = 72000000 / (mAcceleration * rightMotor->prevStepPeriod);
 }
 
 void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
@@ -382,24 +387,25 @@ void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
       //      Serial.println("parseObject() failed");
       return;
     }
-    if ( root.containsKey("offset") && root.containsKey("degrees") ) {
+    if ( root.containsKey("offset") && root.containsKey("degrees")) {
       info->Speed = root["offset"];
       info->Angle = root["degrees"];
+      info->Acceleration= root["acceleration"];
     }
+    mAcceleration = (info->Acceleration/100.00) * MAX_ACCELERATION;
     Serial.print("offset = ");
     Serial.println(info->Speed);
     Serial.print("angle = ");
     Serial.println(info->Angle);
+    Serial.print("acceleration = ");
+    Serial.println(mAcceleration);
     Calculation(info, leftMotor, rightMotor);
+    
     if (!isTimerOn && info->Speed > 0) {
       leftMotorInfo.stepPeriod = leftMotorInfo.prevStepPeriod;
       rightMotorInfo.stepPeriod = rightMotorInfo.prevStepPeriod;
-      rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
-      leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
-      /*leftMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
-      rightMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
-      rightMotorInfo.expDelay = 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
-      leftMotorInfo.expDelay = 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);*/
+      rightMotorInfo.expDelay = 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
+      leftMotorInfo.expDelay = 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
       enableMotor();
       leftMotorInfo.curDir = leftMotorInfo.dir;
       rightMotorInfo.curDir = rightMotorInfo.dir;
