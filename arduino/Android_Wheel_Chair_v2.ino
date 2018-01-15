@@ -10,17 +10,19 @@ ESP8266WebServer server(80);
 #define MOTOR_LEFT_DIR_PIN 4    //d2
 #define MOTOR_RIGHT_STEP_PIN 2  //d4
 #define MOTOR_RIGHT_DIR_PIN 0   //d3
-#define MOTOR_LEFT_FOWARD 1
-#define MOTOR_LEFT_BACKWARD 0
-#define MOTOR_RIGHT_FOWARD 0
-#define MOTOR_RIGHT_BACKWARD 1
+#define MOTOR_LEFT_FOWARD 0
+#define MOTOR_LEFT_BACKWARD 1
+#define MOTOR_RIGHT_FOWARD 1
+#define MOTOR_RIGHT_BACKWARD 0 
 
 
 #define INITIAL_DELAY  1000
+
 #define RAMP_RATE     2
 #define NO_RAMP_CYCLE 2
 
-#define ACCELERATION  0.5
+#define MAX_ACCELERATION  4
+#define ACCELERATION      2
 #define INITIAL_PERIOD  1000
 #define THRESHOLD_GAP       15
 #define MINIMUM_ANGLE     1
@@ -34,6 +36,10 @@ ESP8266WebServer server(80);
 
 #define _1u 80
 #define IS_MOTOR_ACTIVE(x) ((x).reloadPeriod != -1)
+#define STOP_MOTOR()   do{                            \
+                        leftMotor->reloadPeriod = -1; \
+                        rightMotor->reloadPeriod = -1;\
+                        } while(0)
 
 const char *ssid = "test123";
 const char *password = "testing12345";
@@ -41,6 +47,8 @@ volatile unsigned long next;
 volatile int previoustime = 0;
 volatile int motorDelay = 0;
 volatile int isTimerOn = 0;
+
+volatile float mAcceleration;
 /*#define updateIndex(x)    do {                              \
                     if((x)->updated == 1)                   \
                      {                                      \
@@ -56,6 +64,7 @@ struct MotorInfo {
   unsigned long reloadPeriod;
   unsigned long expDelay;
   unsigned long prevStepPeriod;
+  float acceleration;
   int motorControlPin;
   int dirPin;
   int dir;
@@ -76,12 +85,13 @@ typedef struct AngleSpeed AngleSpeed;
 struct AngleSpeed {
   float Speed;
   float Angle;
+  float Acceleration;
   float previousAngle;
   float previousSpeed;
 };
 
 AngleSpeed instruction = {
-  .Speed = 0.0, .Angle = 90.00, .previousAngle = 270, .previousSpeed = 0.0,
+  .Speed = 0.0, .Angle = 90.00, .Acceleration=0, .previousAngle = 270, .previousSpeed = 0.0
 };
 
 void setup() {
@@ -91,37 +101,53 @@ void setup() {
   pinMode(MOTOR_RIGHT_STEP_PIN, OUTPUT);
   pinMode(MOTOR_RIGHT_DIR_PIN, OUTPUT);
   pinMode(MOTOR_ENABLE_PIN, OUTPUT);
-  rightMotorInfo.stepPeriod = 30000;
-  rightMotorInfo.prevStepPeriod = 30000;
-  rightMotorInfo.expDelay == 72000000 / (ACCELERATION * rightMotorInfo.prevStepPeriod);
+  rightMotorInfo.stepPeriod = STOP_PERIOD;
+  rightMotorInfo.prevStepPeriod = STOP_PERIOD;
+  rightMotorInfo.expDelay == 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
   rightMotorInfo.reloadPeriod = -1;
   rightMotorInfo.motorControlPin = MOTOR_RIGHT_STEP_PIN;
   rightMotorInfo.dirPin = MOTOR_RIGHT_DIR_PIN;
   rightMotorInfo.dir = MOTOR_RIGHT_FOWARD;
   rightMotorInfo.steps = 0;
   rightMotorInfo.prevTime = 0;
-  leftMotorInfo.stepPeriod = 30000;
-  leftMotorInfo.prevStepPeriod = 30000;
-  leftMotorInfo.expDelay == 72000000 / (ACCELERATION * leftMotorInfo.prevStepPeriod);
+  leftMotorInfo.stepPeriod = STOP_PERIOD;
+  leftMotorInfo.prevStepPeriod = STOP_PERIOD;
+  leftMotorInfo.expDelay == 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
   leftMotorInfo.reloadPeriod = -1;
   leftMotorInfo.motorControlPin = MOTOR_LEFT_STEP_PIN;
   leftMotorInfo.dirPin = MOTOR_LEFT_DIR_PIN;
   leftMotorInfo.dir = MOTOR_LEFT_FOWARD;
   leftMotorInfo.steps = 0;
   leftMotorInfo.prevTime = 0;
-  disableMotor();
+  mAcceleration = 1;
   WiFi.softAP(ssid, password, 1, 0 );
   handling(&instruction, &leftMotorInfo, &rightMotorInfo);
-  //  handleUturn(&leftMotorInfo , &rightMotorInfo);
+  handleForceStop();
+  handleUturn(&leftMotorInfo , &rightMotorInfo);
   // handlingDebug(&leftMotorInfo , &rightMotorInfo);
   server.begin();
   IPAddress myIP = WiFi.softAPIP();
-  enableMotor();
+  disableMotor();
   noInterrupts();
   timer0_isr_init();
 
   interrupts();
   //  Serial.println(myIP);
+}
+
+void handleForceStop(){
+  server.on("/forcestop", [ = ](){
+    rightMotorInfo.reloadPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.reloadPeriod = MOTOR_MAX_PERIOD;
+    rightMotorInfo.stepPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.stepPeriod = MOTOR_MAX_PERIOD;
+    rightMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.prevStepPeriod = MOTOR_MAX_PERIOD;
+    leftMotorInfo.expDelay = 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
+    rightMotorInfo.expDelay = 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
+    timer0_detachInterrupt();
+    isTimerOn = 0;
+  });
 }
 
 int TimerExpired(unsigned long duration, unsigned long previous) {
@@ -168,25 +194,26 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
     }
     if (motor->curDir != motor->dir) {
       //ramp to zero
-      motor->expDelay -= RAMP_RATE; //ramp faster
-      motor->prevStepPeriod = 72000000 / (ACCELERATION * motor->expDelay);
+      motor->expDelay -= RAMP_RATE;
+      motor->prevStepPeriod = 72000000 / (motor->acceleration * motor->expDelay);
       motor->stepPeriod += motor->prevStepPeriod;
     } else {
-      if(motor->prevStepPeriod >= STOP_PERIOD){
+      if(motor->prevStepPeriod >= STOP_PERIOD && motor->reloadPeriod >= STOP_PERIOD){
         disableMotor();
+        timer0_detachInterrupt();
         isTimerOn = 0;
         return;
       }
       if (motor->prevStepPeriod > (motor->reloadPeriod + THRESHOLD_GAP)) {
         motor->expDelay += RAMP_RATE;
         motor->prevStepPeriod = 72000000
-            / (ACCELERATION * motor->expDelay);
+            / (motor->acceleration * motor->expDelay);
         motor->stepPeriod += motor->prevStepPeriod;
       } else if (motor->prevStepPeriod
           < (motor->reloadPeriod - THRESHOLD_GAP)) {
         motor->expDelay -= RAMP_RATE;
         motor->prevStepPeriod = 72000000
-            / (ACCELERATION * motor->expDelay);
+            / (motor->acceleration * motor->expDelay);
         motor->stepPeriod += motor->prevStepPeriod;
       } else {
         motor->stepPeriod += motor->reloadPeriod;
@@ -195,6 +222,27 @@ void pulseMotorOnTimeout(MotorInfo *motor) {
       }
     }
   }
+}
+
+void initMotor(){
+   rightMotorInfo.stepPeriod = 30000;
+   rightMotorInfo.prevStepPeriod = 30000;
+   rightMotorInfo.expDelay == 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
+   rightMotorInfo.reloadPeriod = -1;
+  rightMotorInfo.motorControlPin = MOTOR_RIGHT_STEP_PIN;
+  rightMotorInfo.dirPin = MOTOR_RIGHT_DIR_PIN;
+  rightMotorInfo.dir = MOTOR_RIGHT_FOWARD;
+  rightMotorInfo.steps = 0;
+  rightMotorInfo.prevTime = 0;
+  leftMotorInfo.stepPeriod = 30000;
+  leftMotorInfo.prevStepPeriod = 30000;
+  leftMotorInfo.expDelay == 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
+  leftMotorInfo.reloadPeriod = -1;
+  leftMotorInfo.motorControlPin = MOTOR_LEFT_STEP_PIN;
+  leftMotorInfo.dirPin = MOTOR_LEFT_DIR_PIN;
+  leftMotorInfo.dir = MOTOR_LEFT_FOWARD;
+  leftMotorInfo.steps = 0;
+  leftMotorInfo.prevTime = 0;
 }
 
 
@@ -264,31 +312,48 @@ void disableMotor() {
   // Serial.println("Disable motor");
 }
 
-int getSlowRatio(int angle)
+float getSlowRatio(float angle)
 {
-    return 1/(angle/90.000);
+    float value = angle/90.00;
+    float result = 1.00/value;
+    Serial.print("result:");
+    Serial.println(result);
+    return result;
 }
 
 int getQuadrant(int angle){
     return (angle/90) + 1;
 }
 
+  
+
 void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
                  MotorInfo *rightMotor) {
 
-  int maxSpeed = MainInfo->Speed == 0? MIN_SPEED:MainInfo->Speed;
-  int maxPeriod = MOTOR_MAX_PERIOD / (maxSpeed/ 100.00);
-
-  int acute, ratio;
+  int maxPeriod;
+  float acute;
+  float ratio;
   int quadrant = getQuadrant(MainInfo->Angle);
+  if( MainInfo->Speed == 0){
+    leftMotor->reloadPeriod = STOP_PERIOD;
+    rightMotor->reloadPeriod = STOP_PERIOD;
+    return;
+  }
+  else{
+    maxPeriod = MOTOR_MAX_PERIOD / (MainInfo->Speed/ 100.00);
+  }
   switch (quadrant) {
     case 1:
-      acute = 90 - (MainInfo->Angle);
+      acute = 90.00 - (float)(MainInfo->Angle);
       acute = acute == 0 ? 1 : acute;
       ratio = getSlowRatio(acute);
+      Serial.print("ratio :");
+      Serial.println(ratio);
       // left wheel will be fast, right wheel will be slow
       leftMotor->reloadPeriod = maxPeriod;
       rightMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration;
+      rightMotor->acceleration = mAcceleration / ratio;
       leftMotor->dir = MOTOR_LEFT_FOWARD;
       rightMotor->dir = MOTOR_RIGHT_FOWARD;
       break;
@@ -298,6 +363,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       leftMotor->reloadPeriod = maxPeriod;
       rightMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration;
+      rightMotor->acceleration = mAcceleration / ratio;
       leftMotor->dir = MOTOR_LEFT_BACKWARD;
       rightMotor->dir = MOTOR_RIGHT_BACKWARD;
       break;
@@ -307,6 +374,8 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       rightMotor->reloadPeriod = maxPeriod;
       leftMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration / ratio;
+      rightMotor->acceleration = mAcceleration;
       leftMotor->dir = MOTOR_LEFT_BACKWARD;
       rightMotor->dir = MOTOR_RIGHT_BACKWARD;
       break;
@@ -316,13 +385,15 @@ void Calculation(AngleSpeed *MainInfo, MotorInfo *leftMotor,
       ratio = getSlowRatio(acute);
       rightMotor->reloadPeriod = maxPeriod;
       leftMotor->reloadPeriod = ratio * maxPeriod;
+      leftMotor->acceleration = mAcceleration / ratio;
+      rightMotor->acceleration = mAcceleration;
       leftMotor->dir = MOTOR_LEFT_FOWARD;
       rightMotor->dir = MOTOR_RIGHT_FOWARD;
       break;
   }
   // expDelay needs to be reload here for some reason that needs investigate
-  leftMotor->expDelay = 72000000 / (ACCELERATION * leftMotor->prevStepPeriod);
-  rightMotor->expDelay = 72000000 / (ACCELERATION * rightMotor->prevStepPeriod);
+  leftMotor->expDelay = 72000000 / (leftMotor->acceleration * leftMotor->prevStepPeriod);
+  rightMotor->expDelay = 72000000 / (rightMotor->acceleration * rightMotor->prevStepPeriod);
 }
 
 void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
@@ -347,19 +418,32 @@ void handling(AngleSpeed *info, MotorInfo *leftMotor, MotorInfo *rightMotor) {
       //      Serial.println("parseObject() failed");
       return;
     }
-    if ( root.containsKey("offset") && root.containsKey("degrees") ) {
+    if ( root.containsKey("offset") && root.containsKey("degrees")) {
       info->Speed = root["offset"];
       info->Angle = root["degrees"];
+      info->Acceleration= root["acceleration"];
     }
+    mAcceleration = (info->Acceleration/100.00) * MAX_ACCELERATION;
+    
     Serial.print("offset = ");
     Serial.println(info->Speed);
     Serial.print("angle = ");
     Serial.println(info->Angle);
+    Serial.print("acceleration = ");
+    Serial.println(mAcceleration);
     Calculation(info, leftMotor, rightMotor);
+    Serial.print("left reload = ");
+    Serial.println(leftMotor->reloadPeriod);
+    Serial.print("right reload = ");
+    Serial.println(rightMotor->reloadPeriod);
     if (!isTimerOn && info->Speed > 0) {
+      leftMotorInfo.stepPeriod = leftMotorInfo.prevStepPeriod;
+      rightMotorInfo.stepPeriod = rightMotorInfo.prevStepPeriod;
+      rightMotorInfo.expDelay = 72000000 / (mAcceleration * rightMotorInfo.prevStepPeriod);
+      leftMotorInfo.expDelay = 72000000 / (mAcceleration * leftMotorInfo.prevStepPeriod);
       enableMotor();
-      leftMotorInfo.curDir = MOTOR_LEFT_FOWARD;
-      rightMotorInfo.curDir = MOTOR_RIGHT_FOWARD;
+      leftMotorInfo.curDir = leftMotorInfo.dir;
+      rightMotorInfo.curDir = rightMotorInfo.dir;
       timer0_attachInterrupt(leftMotorStep_test);
       Serial.println("timer on!");
       isTimerOn = 1;
